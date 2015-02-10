@@ -11,7 +11,50 @@ int sock352_close(int fd);
 int sock352_read(int fd, void *buf, int count);
 int sock352_write(int fd, void *buf, int count);
 
-	
+sock352_pkt_hdr_t * init_packet_hdr(){
+	sock352_pkt_hdr_t estConnection;
+	estConnection.version = SOCK352_VER_1; 
+	estConnection.flags = 0;
+	estConnection.opt_ptr = 0;
+	estConnection.protocol = 0;
+	estConnection.header_len = 0;
+	estConnection.checksum = 0;
+	estConnection.source_port = 0;
+	estConnection.dest_port = 0;
+	estConnection.sequence_no = 0;
+	estConnection.ack_no = 0;
+	estConnection.window = 0;
+	estConnection.payload_len = 0;
+
+	return estConnection;
+}
+
+int attempt_syn(sock352_pkt_hdr_t * packet){
+	if(packet->ack_no == 0){
+		packet->ack_no = SOCK352_SYN;
+		return 0;
+	} else {
+		return -1;
+	}
+}
+
+int attemp_acksyn(sock352_pkt_hdr_t * packet){
+	if(packet->ack_no == SOCK352_SYN){
+		packet->ack_no = SOCK352_SYN + SOCK352_ACK;
+		return 0;
+	} else {
+		return -1;
+	}
+}
+
+int attemp_ack(sock352_pkt_hdr_t * packet){
+	if(packet->ack_no == (SOCK352_SYN + SOCK352_ACK)){
+		packet->ack_no = SOCK352_ACK;
+		return 0;
+	} else {
+		return -1;
+	}
+}
 
 /*
  *  Takes in a single parameter, which is the UDP port that the rest of 
@@ -76,8 +119,11 @@ int sock352_socket(int domain, int type, int protocol){
  * Output: 0 on success, -1 if fails.
  */
 int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len){
-	sock352_pkt_hdr_t estConnection;
-	estConnection.version = SOCK352_VER_1; 
+	
+	sock352_pkt_hdr_t * connection = init_packet_hdr();
+
+
+
 	return ETIMEDOUT;
 }
 
