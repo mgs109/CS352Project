@@ -10,18 +10,24 @@ int sock352_close(int fd);
 int sock352_read(int fd, void *buf, int count);
 int sock352_write(int fd, void *buf, int count);
 
-
+	
 
 int main(int argc, char** argv){
 	return 0;
 }
 
-
+/*
+ *  Takes in a single parameter, which is the UDP port that the rest of 
+ *  the CS 352 RDP library will use for communication between hosts. Setting 
+ *  the udp_port to zero should use default port of 27182.
+ */
 int sock352_init(int udp_port){
 	if(udp_port == -1){
 		/*Test case*/
 		return 0;
-	}else{
+	} else if(udp_port == 0){
+		return SOCK352_DEFAULT_UDP_PORT;
+	} else {
 		if(udp_port < 0){
 			return -1;
 		}		
@@ -29,12 +35,42 @@ int sock352_init(int udp_port){
 	}
 }
 
-
+/*
+ *  Not all combinations of socket family(domain) and socket type are valid. 
+ *  Figure 4.5 in the book shows valid combinations.
+ *
+ *  The 	third argument protocal is set to 0 in each call made from client.c and server.c
+ *  so it's apparently not going to be used by us at this particular moment.
+ *
+ *  On success, the socket function returns a small non-negative integer value. On 
+ *  failure socket functions returns -1. 
+ */
 int sock352_socket(int domain, int type, int protocol){
-	if(domain != 31){
+	/*if(domain != 31){
 		return -1;
 	}
 	return 27182;
+	*/
+
+	if(type == SOCK_STREAM){
+		if(domain == AF_ROUTE || domain == AF_KEY){
+			return SOCK352_FAILURE;
+		}
+	} else if(type == SOCK_DGRAM){
+		if(domain == AF_ROUTE || domain == AF_KEY){
+			return SOCK352_FAILURE;
+		}
+	} else if(type == SOCK_SEQPACKET){
+		if(domain == AF_ROUTE || domain == AF_KEY){
+			return SOCK352_FAILURE;
+		}
+	} else if(type == SOCK_RAW){
+		if(domain == AF_LOCAL){
+			return SOCK352_FAILURE;
+		}
+	}	
+
+	return SOCK352_SUCCESS;
 }
 
 
