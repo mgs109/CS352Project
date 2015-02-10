@@ -1,4 +1,5 @@
 #include "sock352.h"
+#include <errno.h>
 
 int sock352_init(int udp_port);
 int sock352_socket(int domain, int type, int protocol);
@@ -11,10 +12,6 @@ int sock352_read(int fd, void *buf, int count);
 int sock352_write(int fd, void *buf, int count);
 
 	
-
-int main(int argc, char** argv){
-	return 0;
-}
 
 /*
  *  Takes in a single parameter, which is the UDP port that the rest of 
@@ -50,7 +47,7 @@ int sock352_socket(int domain, int type, int protocol){
 		return -1;
 	}
 	return 27182;
-	*/
+	*/	
 
 	if(type == SOCK_STREAM){
 		if(domain == AF_ROUTE || domain == AF_KEY){
@@ -73,13 +70,25 @@ int sock352_socket(int domain, int type, int protocol){
 	return SOCK352_SUCCESS;
 }
 
-
+/*Establishes connection to TCP server. 
+ * Input: fd is descriptor returned from socket.
+ * 	  addr is socket address, len is its size.
+ * Output: 0 on success, -1 if fails.
+ */
 int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len){
-
-	return 0;
+	sock352_pkt_hdr_t estConnection;
+	estConnection.version = SOCK352_VER_1; 
+	return ETIMEDOUT;
 }
 
 int sock352_bind(int fd, sockaddr_sock352_t *addr, socklen_t len){
 
 	return 0;
 }
+
+
+int sock352_listen(int fd, int n){}
+int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len){}
+int sock352_close(int fd){}
+int sock352_read(int fd, void *buf, int count){}
+int sock352_write(int fd, void *buf, int count){}
