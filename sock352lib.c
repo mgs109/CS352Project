@@ -1,5 +1,6 @@
 #include "sock352.h"
 #include <errno.h>
+#include <stdlib.h>
 
 int sock352_init(int udp_port);
 int sock352_socket(int domain, int type, int protocol);
@@ -11,20 +12,21 @@ int sock352_close(int fd);
 int sock352_read(int fd, void *buf, int count);
 int sock352_write(int fd, void *buf, int count);
 
-sock352_pkt_hdr_t * init_packet_hdr(){
-	sock352_pkt_hdr_t estConnection;
-	estConnection.version = SOCK352_VER_1; 
-	estConnection.flags = 0;
-	estConnection.opt_ptr = 0;
-	estConnection.protocol = 0;
-	estConnection.header_len = 0;
-	estConnection.checksum = 0;
-	estConnection.source_port = 0;
-	estConnection.dest_port = 0;
-	estConnection.sequence_no = 0;
-	estConnection.ack_no = 0;
-	estConnection.window = 0;
-	estConnection.payload_len = 0;
+sock352_pkt_hdr_t * init_packet_hdr(uint32_t clientPort, in_port_t destinationPort){
+	sock352_pkt_hdr_t  * estConnection;
+	estConnection = (sock352_pkt_hdr_t * ) malloc(sizeof(sock352_pkt_hdr_t));
+	estConnection->version = SOCK352_VER_1; 
+	estConnection->flags = 0;
+	estConnection->opt_ptr = 0;
+	estConnection->protocol = 0;
+	estConnection->header_len = 0;
+	estConnection->checksum = 0;
+	estConnection->source_port = clientPort;
+	estConnection->dest_port = destinationPort;
+	estConnection->sequence_no = 0;
+	estConnection->ack_no = 0;
+	estConnection->window = 0;
+	estConnection->payload_len = 0;
 
 	return estConnection;
 }
@@ -38,7 +40,7 @@ int attempt_syn(sock352_pkt_hdr_t * packet){
 	}
 }
 
-int attemp_acksyn(sock352_pkt_hdr_t * packet){
+int attempt_acksyn(sock352_pkt_hdr_t * packet){
 	if(packet->ack_no == SOCK352_SYN){
 		packet->ack_no = SOCK352_SYN + SOCK352_ACK;
 		return 0;
@@ -47,7 +49,7 @@ int attemp_acksyn(sock352_pkt_hdr_t * packet){
 	}
 }
 
-int attemp_ack(sock352_pkt_hdr_t * packet){
+int attempt_ack(sock352_pkt_hdr_t * packet){
 	if(packet->ack_no == (SOCK352_SYN + SOCK352_ACK)){
 		packet->ack_no = SOCK352_ACK;
 		return 0;
@@ -120,11 +122,11 @@ int sock352_socket(int domain, int type, int protocol){
  */
 int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len){
 	
-	sock352_pkt_hdr_t * connection = init_packet_hdr();
-
-
-
-	return ETIMEDOUT;
+	sock352_pkt_hdr_t * connection = init_packet_hdr(addr->cs352_port, addr->sin_port);
+	if(attempt_syn(connection) != 0 ){
+		return ETIMEDOUT;
+	}
+	return 0;
 }
 
 int sock352_bind(int fd, sockaddr_sock352_t *addr, socklen_t len){
