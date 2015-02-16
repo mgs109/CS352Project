@@ -1,6 +1,7 @@
 #include "sock352.h"
 #include <errno.h>
 #include <stdlib.h>
+#include <sys/types.h>
 
 int sock352_init(int udp_port);
 int sock352_socket(int domain, int type, int protocol);
@@ -115,7 +116,7 @@ int sock352_socket(int domain, int type, int protocol){
 	return SOCK352_SUCCESS;
 }
 
-/*Establishes connection to TCP server. 
+/* Establishes connection to TCP server. 
  * Input: fd is descriptor returned from socket.
  * 	  addr is socket address, len is its size.
  * Output: 0 on success, -1 if fails.
@@ -129,13 +130,41 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len){
 	return 0;
 }
 
+/* Assigns protocol address to socket.
+ * Input: fd is descriptor returned from socket.
+ * 	  addr is pointed to a protocol specific address.
+ * 	  len is length of addr.
+ * Output: 0 if OK, -1 if error.
+ */
 int sock352_bind(int fd, sockaddr_sock352_t *addr, socklen_t len){
-
+	addr->cs352_port = htonl(INADDR_ANY);
 	return 0;
 }
 
+/* Called by server, performs 2 actions.
+ * 1. Converts an unconnected socket into a passive socket. 
+ * 	Indicates that kernel should accept incoming connection
+ * 	requests directed to this socket. Moves socket from CLOSED
+ * 	state to LISTEN state.
+ * 2. Specifies maximum number of connections kernel should queue for
+ * 	the socket (second argument, n).
+ *
+ * Output: 0 if OK, -1 if error.
+ *
+ */
+int sock352_listen(int fd, int n){
+return 0;
+}
 
-int sock352_listen(int fd, int n){}
+/* Called by server. Returns next completed connection from the front of 
+ * connection queue. If Q is empty, process put to sleep/
+ * Inputs: addr and len are used to return the protocol address of the client.
+ * 	   len should be set to size of the socket address structure addr points
+ * 	   to. 
+ *
+ *
+ * Output: non-neg descriptor if OK, -1 if error.
+ */
 int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len){}
 int sock352_close(int fd){}
 int sock352_read(int fd, void *buf, int count){}
