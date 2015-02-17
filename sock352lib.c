@@ -20,7 +20,7 @@ sock352_pkt_hdr_t * init_packet_hdr(uint32_t clientPort, in_port_t destinationPo
 	estConnection->flags = 0;
 	estConnection->opt_ptr = 0;
 	estConnection->protocol = 0;
-	estConnection->header_len = 0;
+	estConnection->header_len = sizeof(sock352_pkt_hdr_t); 
 	estConnection->checksum = 0;
 	estConnection->source_port = clientPort;
 	estConnection->dest_port = destinationPort;
@@ -89,11 +89,6 @@ int sock352_init(int udp_port){
  *  failure socket functions returns -1. 
  */
 int sock352_socket(int domain, int type, int protocol){
-	/*if(domain != 31){
-		return -1;
-	}
-	return 27182;
-	*/	
 
 	if(type == SOCK_STREAM){
 		if(domain == AF_ROUTE || domain == AF_KEY){
@@ -113,7 +108,7 @@ int sock352_socket(int domain, int type, int protocol){
 		}
 	}	
 
-	return SOCK352_SUCCESS;
+	return socket(domain, type, protocol);
 }
 
 /* Establishes connection to TCP server. 
@@ -123,11 +118,13 @@ int sock352_socket(int domain, int type, int protocol){
  */
 int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len){
 	
+	//TODO: figure out where we initialize packets
 	sock352_pkt_hdr_t * connection = init_packet_hdr(addr->cs352_port, addr->sin_port);
 	if(attempt_syn(connection) != 0 ){
 		return ETIMEDOUT;
 	}
-	return 0;
+
+	return connect(fd, addr, len);
 }
 
 /* Assigns protocol address to socket.
