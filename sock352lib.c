@@ -82,7 +82,7 @@ int sock352_init(int udp_port){
  *  Not all combinations of socket family(domain) and socket type are valid. 
  *  Figure 4.5 in the book shows valid combinations.
  *
- *  The 	third argument protocal is set to 0 in each call made from client.c and server.c
+ *  The	third argument protocal is set to 0 in each call made from client.c and server.c
  *  so it's apparently not going to be used by us at this particular moment.
  *
  *  On success, the socket function returns a small non-negative integer value. On 
@@ -91,7 +91,7 @@ int sock352_init(int udp_port){
 int sock352_socket(int domain, int type, int protocol){
 
 	if(type == SOCK_STREAM){
-		if(domain == AF_ROUTE || domain == AF_KEY){
+		if(domain == AF_ROUTE || domain == AF_KEY){	
 			return SOCK352_FAILURE;
 		}
 	} else if(type == SOCK_DGRAM){
@@ -108,7 +108,9 @@ int sock352_socket(int domain, int type, int protocol){
 		}
 	}	
 
-	return socket(domain, type, protocol);
+	int a = socket(domain, SOCK_DGRAM, protocol);
+	perror("Error:" );
+	return a; 
 }
 
 /* Establishes connection to TCP server. 
@@ -119,12 +121,12 @@ int sock352_socket(int domain, int type, int protocol){
 int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len){
 	
 	//TODO: figure out where we initialize packets
-	sock352_pkt_hdr_t * connection = init_packet_hdr(addr->cs352_port, addr->sin_port);
+/*	sock352_pkt_hdr_t * connection = init_packet_hdr(addr->cs352_port, addr->sin_port);
 	if(attempt_syn(connection) != 0 ){
 		return ETIMEDOUT;
 	}
-
-	return connect(fd, addr, len);
+*/
+	return connect(fd, (void *)&addr, len);
 }
 
 /* Assigns protocol address to socket.
@@ -134,8 +136,10 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len){
  * Output: 0 if OK, -1 if error.
  */
 int sock352_bind(int fd, sockaddr_sock352_t *addr, socklen_t len){
-	addr->cs352_port = htonl(INADDR_ANY);
-	return 0;
+//	addr->cs352_port = htonl(INADDR_ANY);
+	int a =  bind(fd, (void *) &addr, len);
+	perror("Error:");
+	return a;
 }
 
 /* Called by server, performs 2 actions.
@@ -150,7 +154,13 @@ int sock352_bind(int fd, sockaddr_sock352_t *addr, socklen_t len){
  *
  */
 int sock352_listen(int fd, int n){
-return 0;
+
+	char* ptr;
+	if((ptr = getenv("LISTENQ")) != NULL){
+		n = atoi(ptr);
+	}
+
+	return listen(fd, n);
 }
 
 /* Called by server. Returns next completed connection from the front of 
@@ -162,7 +172,15 @@ return 0;
  *
  * Output: non-neg descriptor if OK, -1 if error.
  */
-int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len){}
-int sock352_close(int fd){}
-int sock352_read(int fd, void *buf, int count){}
-int sock352_write(int fd, void *buf, int count){}
+int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len){
+	return accept(_fd, (void *) &addr, (int * ) &len);
+}
+int sock352_close(int fd){
+	return close(fd);
+}
+int sock352_read(int fd, void *buf, int count){
+	return read(fd, (void * ) &buf, count);
+}
+int sock352_write(int fd, void *buf, int count){
+	return write(fd, (void *) &buf, count);
+}
