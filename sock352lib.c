@@ -20,7 +20,7 @@ sock352_pkt_hdr_t * init_packet_hdr(uint32_t clientPort, in_port_t destinationPo
 	estConnection->flags = 0;
 	estConnection->opt_ptr = 0;
 	estConnection->protocol = 0;
-	estConnection->header_len = 0;
+	estConnection->header_len = sizeof(sock352_pkt_hdr_t); 
 	estConnection->checksum = 0;
 	estConnection->source_port = clientPort;
 	estConnection->dest_port = destinationPort;
@@ -82,21 +82,16 @@ int sock352_init(int udp_port){
  *  Not all combinations of socket family(domain) and socket type are valid. 
  *  Figure 4.5 in the book shows valid combinations.
  *
- *  The 	third argument protocal is set to 0 in each call made from client.c and server.c
+ *  The	third argument protocal is set to 0 in each call made from client.c and server.c
  *  so it's apparently not going to be used by us at this particular moment.
  *
  *  On success, the socket function returns a small non-negative integer value. On 
  *  failure socket functions returns -1. 
  */
 int sock352_socket(int domain, int type, int protocol){
-	/*if(domain != 31){
-		return -1;
-	}
-	return 27182;
-	*/	
 
 	if(type == SOCK_STREAM){
-		if(domain == AF_ROUTE || domain == AF_KEY){
+		if(domain == AF_ROUTE || domain == AF_KEY){	
 			return SOCK352_FAILURE;
 		}
 	} else if(type == SOCK_DGRAM){
@@ -111,9 +106,10 @@ int sock352_socket(int domain, int type, int protocol){
 		if(domain == AF_LOCAL){
 			return SOCK352_FAILURE;
 		}
-	}	
-
-	return SOCK352_SUCCESS;
+	}
+		
+	return socket(AF_INET, SOCK_DGRAM, 0);
+	
 }
 
 /* Establishes connection to TCP server. 
@@ -123,11 +119,13 @@ int sock352_socket(int domain, int type, int protocol){
  */
 int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len){
 	
-	sock352_pkt_hdr_t * connection = init_packet_hdr(addr->cs352_port, addr->sin_port);
+	//TODO: figure out where we initialize packets
+/*	sock352_pkt_hdr_t * connection = init_packet_hdr(addr->cs352_port, addr->sin_port);
 	if(attempt_syn(connection) != 0 ){
 		return ETIMEDOUT;
 	}
-	return 0;
+*/
+	return connect(fd, (void *)&addr, len);
 }
 
 /* Assigns protocol address to socket.
@@ -137,8 +135,15 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len){
  * Output: 0 if OK, -1 if error.
  */
 int sock352_bind(int fd, sockaddr_sock352_t *addr, socklen_t len){
-	addr->cs352_port = htonl(INADDR_ANY);
-	return 0;
+	//Transfer sock352 addr data to a sockaddr
+	struct sockaddr_in myaddr;
+	myaddr.sin_family = AF_INET;
+	myaddr.sin_port = htons(addr->sin_port);
+	myaddr.sin_addr.s_addr = htonl(addr->sin_addr.s_addr);
+	socklen_t mylen = sizeof(myaddr);
+
+	return  bind(fd,  (struct sockaddr *) &myaddr, mylen);
+
 }
 
 /* Called by server, performs 2 actions.
@@ -153,7 +158,8 @@ int sock352_bind(int fd, sockaddr_sock352_t *addr, socklen_t len){
  *
  */
 int sock352_listen(int fd, int n){
-return 0;
+	//listen can return 0 for part 1
+	return 0;
 }
 
 /* Called by server. Returns next completed connection from the front of 
@@ -165,7 +171,34 @@ return 0;
  *
  * Output: non-neg descriptor if OK, -1 if error.
  */
-int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len){}
-int sock352_close(int fd){}
-int sock352_read(int fd, void *buf, int count){}
-int sock352_write(int fd, void *buf, int count){}
+int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len){
+	//transfer addr data
+	struct sockaddr_in myaddr;
+	myaddr.sin_family = addr->cs352_port;
+	myaddr.sin_port = addr->sin_port;
+	myaddr.sin_addr = addr->sin_addr;
+	socklen_t mylen = sizeof(myaddr);
+	
+	sock352_pkt_hdr_t mybuff [sizeof(sock352_pkt_hdr_t)];
+	int mybufflen = sizeof(mybuff);
+	
+	recvfrom(_fd, &mybuff, mybufflen, 0, (struct sockaddr *) &myaddr, (int * ) &mylen);
+
+	//receive packet. stored in mybuff.
+	
+	//set up ack and seq numbers
+	mybuff->flags = (SOCK352_SYN | SOCK352_ACK);
+	//create empty list of fragments
+	
+	
+	return accept(_fd, (struct sockaddr * ) &myaddr, (int * ) &mylen);
+}
+int sock352_close(int fd){
+	return close(fd);
+}
+int sock352_read(int fd, void *buf, int count){
+	return read(fd, (void * ) &buf, count);
+}
+int sock352_write(int fd, void *buf, int count){
+	return write(fd, (void *) &buf, count);
+}
