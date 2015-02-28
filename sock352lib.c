@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/types.h>
+#include <strings.h>
+#include <arpa/inet.h>
+
 
 int sock352_init(int udp_port);
 int sock352_socket(int domain, int type, int protocol);
@@ -15,7 +18,6 @@ int sock352_read(int fd, void *buf, int count);
 int sock352_write(int fd, void *buf, int count);
 
 
-	struct sockaddr_in cliaddr, servaddr;	
 
 sock352_pkt_hdr_t * init_packet_hdr(uint32_t clientPort, in_port_t destinationPort){
 	sock352_pkt_hdr_t  * estConnection;
@@ -43,6 +45,7 @@ sock352_pkt_hdr_t * init_packet_hdr(uint32_t clientPort, in_port_t destinationPo
  *  the udp_port to zero should use default port of 27182.
  */
 int sock352_init(int udp_port){
+
 	if(udp_port == -1){
 		/*Test case*/
 		return 0;
@@ -52,7 +55,7 @@ int sock352_init(int udp_port){
 		if(udp_port < 0){
 			return -1;
 		}		
-		return udp_port;
+		return SOCK352_SUCCESS;
 	}
 }
 
@@ -96,29 +99,33 @@ int sock352_socket(int domain, int type, int protocol){
  * Output: 0 on success, -1 if fails.
  */
 int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len){
-	
+
+
+	struct sockaddr_in cliaddr, servaddr;	
+	int n;
 	//TODO: figure out where we initialize packets
-	sock352_pkt_hdr_t * connection = init_packet_hdr(addr->cs352_port, addr->sin_port);
-	sock352_pkt_hdr_t * receive = init_packet_hdr(0,0);
+	sock352_pkt_hdr_t  send;
+	sock352_pkt_hdr_t  receive;
 	//transfer addr data to sockaddr
 	
-	cliaddr.sin_family = AF_INET;
-	cliaddr.sin_port = addr->sin_port;
-	cliaddr.sin_addr.s_addr =addr->sin_addr.s_addr;
-	socklen_t mylen = sizeof(cliaddr);
-	int connectionsize = sizeof(connection);
+	bzero(&servaddr, sizeof(servaddr));
 
-	printf("FD: %d, addr port: %d, addrl: %d\n", fd, addr->sin_port, addr->sin_addr.s_addr);	
+	servaddr.sin_family = AF_INET;
+	servaddr.sin_port = htons(addr->sin_port);
+	char* ad = "128.6.13.171";
+	servaddr.sin_addr.s_addr = inet_addr(ad);
+
+//	printf("FD: %d, addr port: %d, addrl: %d\n", fd, addr->sin_port, addr->sin_addr.s_addr);	
 	
-	printf("FD: %d, addr port: %d, addrl: %d", fd, cliaddr.sin_port, cliaddr.sin_addr.s_addr);	
-	connection->flags = SOCK352_SYN;
+//	printf("FD: %d, addr port: %d, addrl: %d", fd, cliaddr.sin_port, cliaddr.sin_addr.s_addr);	
+	send.flags = SOCK352_SYN;
 
-	sendto(fd, &connection, sizeof(connection), 0, (struct sockaddr * ) &servaddr, sizeof(servaddr));
+	sendto(fd, &send, sizeof(send), 0, (struct sockaddr * ) &servaddr, sizeof(servaddr));
 
 
-	recvfrom(fd, &receive, sizeof(receive), 0, (struct sockaddr *) &servaddr, (int * )&mylen);
+	n = recvfrom(fd, &receive, sizeof(receive), 0, NULL, NULL);
 
-	if(connection->flags == (SOCK352_SYN | SOCK352_ACK)){
+	if(send.flags == (SOCK352_SYN | SOCK352_ACK)){
 		printf("Success\n\n");
 
 	}else{
@@ -141,7 +148,7 @@ int sock352_bind(int fd, sockaddr_sock352_t *addr, socklen_t len){
 	myaddr.sin_port = htons(addr->sin_port);
 	myaddr.sin_addr.s_addr = htonl(addr->sin_addr.s_addr);
 	socklen_t mylen = sizeof(myaddr);
-
+	return 0;
 	return  bind(fd,  (struct sockaddr *) &myaddr, mylen);
 
 }
@@ -173,28 +180,31 @@ int sock352_listen(int fd, int n){
  */
 int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len){
 	//transfer addr data
+
+	struct sockaddr_in cliaddr, servaddr;	
+	bzero(&servaddr, sizeof(servaddr));
+
 	servaddr.sin_family = AF_INET;
-	servaddr.sin_port = addr->sin_port;
-	servaddr.sin_addr.s_addr = addr->sin_addr.s_addr;
+	servaddr.sin_port = htons(addr->sin_port);
+	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 	socklen_t mylen = sizeof(cliaddr);
 	
 	sock352_pkt_hdr_t mybuff [sizeof(sock352_pkt_hdr_t)];
 	int mybufflen = sizeof(mybuff);
-	int length = -1;
+	
+	int n;
 
 
+	//printf("FD: %d, addr port: %d, addrl: %d\n", _fd, addr->sin_port, addr->sin_addr.s_addr);	
+	n = recvfrom(_fd, mybuff, mybufflen, 0, (struct sockaddr *) &cliaddr,  &mylen);
 
-	printf("FD: %d, addr port: %d, addrl: %d\n", _fd, addr->sin_port, addr->sin_addr.s_addr);	
-	length = recvfrom(_fd, &mybuff, mybufflen, 0, (struct sockaddr *) &cliaddr, (int * ) &mylen);
-
-	printf("FD: %d, addr port: %d, addrl: %d", _fd, servaddr.sin_port, servaddr.sin_addr.s_addr);	
+	//printf("FD: %d, addr port: %d, addrl: %d", _fd, servaddr.sin_port, servaddr.sin_addr.s_addr);	
 	//receive packet. stored in mybuff.
-	printf("%d\n", length);
 	//set up ack and seq numbers
 	if(mybuff->flags == SOCK352_SYN){
 		mybuff->flags = (SOCK352_SYN | SOCK352_ACK);
 
-		sendto(_fd, &mybuff, mybufflen, 0, (struct sockaddr * ) &cliaddr, mylen);
+		sendto(_fd, mybuff, n, 0, (struct sockaddr * ) &cliaddr, sizeof(cliaddr));
 	}
 	else{
 		return 1;
@@ -211,6 +221,7 @@ int sock352_close(int fd){
 int sock352_read(int fd, void *buf, int count){
 	return read(fd, (void * ) &buf, count);
 }
+int sock352_init2(int local, int remote){};
 int sock352_write(int fd, void *buf, int count){
 	return write(fd, (void *) &buf, count);
 }
