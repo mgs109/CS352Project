@@ -1,23 +1,7 @@
 #include "sock352.h"
-#include <errno.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <sys/types.h>
-#include <strings.h>
-#include <arpa/inet.h>
+#include "sock352lib.h"
 
-
-int sock352_init(int udp_port);
-int sock352_socket(int domain, int type, int protocol);
-int sock352_bind(int fd, sockaddr_sock352_t *addr, socklen_t len);
-int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len);
-int sock352_listen(int fd, int n);
-int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len);
-int sock352_close(int fd);
-int sock352_read(int fd, void *buf, int count);
-int sock352_write(int fd, void *buf, int count);
-
-
+conn_status *  global_status; // = (conn_status *)malloc(sizeof(conn_status));
 
 sock352_pkt_hdr_t * init_packet_hdr(uint32_t clientPort, in_port_t destinationPort){
 	sock352_pkt_hdr_t  * estConnection;
@@ -38,7 +22,6 @@ sock352_pkt_hdr_t * init_packet_hdr(uint32_t clientPort, in_port_t destinationPo
 	return estConnection;
 }
 
-
 /*
  *  Takes in a single parameter, which is the UDP port that the rest of 
  *  the CS 352 RDP library will use for communication between hosts. Setting 
@@ -51,13 +34,38 @@ int sock352_init(int udp_port){
 		return 0;
 	} else if(udp_port == 0){
 		return SOCK352_DEFAULT_UDP_PORT;
-	} else {
-		if(udp_port < 0){
-			return -1;
-		}		
-		return SOCK352_SUCCESS;
+	} else if (udp_port < 0){
+		return -1;		
 	}
+
+	
+	global_status = (conn_status *)malloc(sizeof(conn_status));
+
+	global_status->cli_port = 0;
+	global_status->serv_port = 0;
+	global_status->cid = 0;
+	global_status->stat = UNCONNECTED;
+
+	return SOCK352_SUCCESS;
+
 }
+
+int sock352_init2(int remote_port, int local_port){
+
+	if(remote_port < 0 || local_port < 0){
+         		return SOCK352_FAILURE;
+ 	}
+
+	global_status = (conn_status *)malloc(sizeof(conn_status));
+
+ 	global_status->cli_port = 0;
+	global_status->serv_port = 0;
+	global_status->cid = 0;
+	global_status->stat = UNCONNECTED;
+
+ 	return SOCK352_SUCCESS;
+ 
+ }
 
 /*
  *  Not all combinations of socket family(domain) and socket type are valid. 
@@ -100,7 +108,6 @@ int sock352_socket(int domain, int type, int protocol){
  */
 int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len){
 
-
 	struct sockaddr_in cliaddr, servaddr;	
 	int n;
 	//TODO: figure out where we initialize packets
@@ -112,16 +119,21 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len){
 
 	servaddr.sin_family = AF_INET;
 	servaddr.sin_port = htons(addr->sin_port);
-	char* ad = "128.6.13.171";
+	char* ad = "128.6.13.175"; //ip of kill.cs.rutgers.edu
 	servaddr.sin_addr.s_addr = inet_addr(ad);
 
-//	printf("FD: %d, addr port: %d, addrl: %d\n", fd, addr->sin_port, addr->sin_addr.s_addr);	
-	
-//	printf("FD: %d, addr port: %d, addrl: %d", fd, cliaddr.sin_port, cliaddr.sin_addr.s_addr);	
+
+	global_status->serv_port = htons(addr->sin_port); //sin_port is UDP port number
 	send.flags = SOCK352_SYN;
 
-	sendto(fd, &send, sizeof(send), 0, (struct sockaddr * ) &servaddr, sizeof(servaddr));
 
+	bytes_sent = sendto(fd, &send, sizeof(send), 0, (struct sockaddr * ) &servaddr, sizeof(servaddr));
+
+	if(bytes_sent < 0){
+		printf("sendto error\n");
+	} else {
+		printf("%d bytes sentn", bytes_sent);
+	}
 
 	n = recvfrom(fd, &receive, sizeof(receive), 0, NULL, NULL);
 
@@ -130,7 +142,7 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len){
 
 	}else{
 		printf("just syn, need syn ack\n\n");
-}
+	}
 
 	return connect(fd, (struct sockaddr *) &cliaddr, sizeof(cliaddr));
 }
@@ -189,13 +201,11 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len){
 	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 	socklen_t mylen = sizeof(cliaddr);
 	
-	sock352_pkt_hdr_t mybuff [sizeof(sock352_pkt_hdr_t)];
+	sock352_pkt_hdr_t mybuff[sizeof(sock352_pkt_hdr_t)];
 	int mybufflen = sizeof(mybuff);
 	
 	int n;
 
-
-	//printf("FD: %d, addr port: %d, addrl: %d\n", _fd, addr->sin_port, addr->sin_addr.s_addr);	
 	n = recvfrom(_fd, mybuff, mybufflen, 0, (struct sockaddr *) &cliaddr,  &mylen);
 
 	//printf("FD: %d, addr port: %d, addrl: %d", _fd, servaddr.sin_port, servaddr.sin_addr.s_addr);	
@@ -211,8 +221,7 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len){
 
 	}
 	//create empty list of fragments
-	
-	
+		
 	return accept(_fd, (struct sockaddr * ) &servaddr, (int * ) &mylen);
 }
 int sock352_close(int fd){
@@ -221,7 +230,6 @@ int sock352_close(int fd){
 int sock352_read(int fd, void *buf, int count){
 	return read(fd, (void * ) &buf, count);
 }
-int sock352_init2(int local, int remote){};
 int sock352_write(int fd, void *buf, int count){
 	return write(fd, (void *) &buf, count);
 }
