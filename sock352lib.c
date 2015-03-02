@@ -234,7 +234,7 @@ int sock352_read(int fd, void *buf, int count){
 	if(fd < 0){ return -1; }
 
 	if(global_status.stat == UNCONNECTED){
-		//return error
+		return -1;
 	}
 
 	int bytes_read = 0;
@@ -245,7 +245,7 @@ int sock352_read(int fd, void *buf, int count){
 	bytes_read = recvfrom(fd, frag, sizeof(frag), 0, global_status->cliaddr, sizeof(global_status->cliaddr));
 
 	if(bytes_read < 0){
-		//return error;
+		return -1;
 	}
 
 	// increment seq num and flag ack

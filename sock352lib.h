@@ -21,6 +21,9 @@ struct conn_status {
 	int cli_port;
 	int serv_port;
 	int cid;		//connection id, incremented everytime we adda  connection
+	int seq_num;
+	struct sockaddr_in cliaddr;	
+	struct sockaddr_in servaddr;	
 	status stat;
 };
 
