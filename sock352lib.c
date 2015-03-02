@@ -111,7 +111,7 @@ int sock352_socket(int domain, int type, int protocol){
 int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len){
 
 	struct sockaddr_in cliaddr, servaddr;	
-	int n;
+	int n, bytes_sent;
 	//TODO: figure out where we initialize packets
 	sock352_pkt_hdr_t  send;
 	sock352_pkt_hdr_t  receive;
@@ -231,16 +231,17 @@ int sock352_read(int fd, void *buf, int count){
 
 	if(fd < 0){ return -1; }
 
-	if(global_status.stat == UNCONNECTED){
+	if(global_status->stat == UNCONNECTED){
 		//return error or wait
 	}
 
 	int bytes_read = 0;
 	int bytes_sent = 0;
+	int len = sizeof(global_status->cliaddr);
 	fragment * frag = (fragment *)malloc(sizeof(fragment));
 
 	// receive packet
-	bytes_read = recvfrom(fd, frag, sizeof(fragment), 0, global_status->cliaddr, sizeof(global_status->cliaddr));
+	bytes_read = recvfrom(fd, frag, sizeof(fragment), 0, (struct sockaddr *)&global_status->cliaddr, &len);
 
 	if(bytes_read < 0){
 		printf("error in file: %s in the function: %s on line %d\n", __FILE__, __FUNCTION__, __LINE__);
@@ -248,11 +249,11 @@ int sock352_read(int fd, void *buf, int count){
 	}
 
 	// increment seq num and set flag ack
-	conn_status->seq_num++;
-	frag->packet = SOCK352_ACK;
+	global_status->seq_num++;
+	frag->packet.flags = SOCK352_ACK;
 
 	//and send back
-	bytes_sent = sendto(fd, &frag, sizeof(fragment), 0, (struct sockaddr * ) &global_status->servaddr, sizeof(global_status->addr));
+	bytes_sent = sendto(fd, &frag, sizeof(fragment), 0, (struct sockaddr * ) &global_status->servaddr, sizeof(global_status->servaddr));
     if(bytes_sent < 0){
 	    printf("Error sending in File: %s, Line %d\n",  __FILE__ , __LINE__);
         return -1;
@@ -269,34 +270,34 @@ int sock352_write(int fd, void *buf, int count){
         return 0;
     }
 
-        int bytes_sent = -1, fragbool = 0;
+    int bytes_sent = -1, fragbool = 0;
 
-        pthread_mutex_lock(&connection->mutex);
+    pthread_mutex_lock(&global_status->mutex);
 
-        fragment * sendfrag = (fragment *)malloc(sizeof(fragment));
-        fragment * recvfrag = (fragment *)malloc(sizeof(fragment));
+    fragment * sendfrag = (fragment *)malloc(sizeof(fragment));
+    fragment * recvfrag = (fragment *)malloc(sizeof(fragment));
 
-        sendfrag->data = buf;
-        sendfrag->packet->sequence_no = global_status->seq_num;
+    strcpy(sendfrag->data, buf);
+    sendfrag->packet.sequence_no = global_status->seq_num;
 
-        global_status->seq_num++;
+    global_status->seq_num++;
 
-        while(!fragbool){
-                bytes_sent = sendto(fd, &send, sizeof(send), 0, (struct sockaddr * ) &servaddr, sizeof(servaddr));
-                if(bytes_sent < 0){
-                        printf("Error sending in File: %s, Line %d\n",  __FILE__ , __LINE__);
-                        return -1;
-                }
+    while(!fragbool){
+            bytes_sent = sendto(fd, &send, sizeof(send), 0, (struct sockaddr * )&global_status->servaddr, sizeof(global_status->servaddr));
+            if(bytes_sent < 0){
+                    printf("Error sending in File: %s, Line %d\n",  __FILE__ , __LINE__);
+                    return -1;
+            }
 
-                recvfrom(fd, &recvfrag, sizeof(recvfrag), 0, NULL, NULL);
+            recvfrom(fd, &recvfrag, sizeof(recvfrag), 0, NULL, NULL);
 
-                if((recvfrag->packet->seq_no != (global_status->seq_no)) && (recvfrag->packet->flags == SOCK352_ACK)){
-                        continue;
-                }
-                global_status->seq_no++;
-                fragbool = 1;
-        }
-    pthread_mutex_unlock(&connection->mutex);
+            if((recvfrag->packet.sequence_no != (global_status->seq_num)) && (recvfrag->packet.flags == SOCK352_ACK)){
+                    continue;
+            }
+            global_status->seq_num++;
+            fragbool = 1;
+    }
+    pthread_mutex_unlock(&global_status->mutex);
 	return write(fd, (void *) &buf, count);
 }
 
