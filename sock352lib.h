@@ -1,3 +1,7 @@
+/* authors: Mark Conley && Michael Sabbagh 
+ * section: 01
+ */
+
 #include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>

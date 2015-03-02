@@ -1,11 +1,17 @@
+/* authors: Mark Conley && Michael Sabbagh 
+ * section: 01
+ */
+
 #include "sock352.h"
 #include "sock352lib.h"
 
 conn_status * global_status = NULL;
 
+/* Description: initializes a packet header to simplify initialization process */
 sock352_pkt_hdr_t * init_packet_hdr(uint32_t clientPort, in_port_t destinationPort){
 	sock352_pkt_hdr_t  * estConnection;
 	estConnection = (sock352_pkt_hdr_t * ) malloc(sizeof(sock352_pkt_hdr_t));
+	if(!estConnection) exit(-1);
 	estConnection->version = SOCK352_VER_1; 
 	estConnection->flags = 0;
 	estConnection->opt_ptr = 0;
@@ -51,6 +57,7 @@ int sock352_init(int udp_port){
 
 }
 
+/* Description: initializer for testing on same machine */
 int sock352_init2(int remote_port, int local_port){
 
 	if(remote_port < 0 || local_port < 0){
@@ -81,6 +88,7 @@ int sock352_init2(int remote_port, int local_port){
  */
 int sock352_socket(int domain, int type, int protocol){
 
+	/* checks for compatibility of socket domain and socket type */
 	if(type == SOCK_STREAM){
 		if(domain == AF_ROUTE || domain == AF_KEY){	
 			return SOCK352_FAILURE;
@@ -103,7 +111,7 @@ int sock352_socket(int domain, int type, int protocol){
 	
 }
 
-/* Establishes connection to TCP server. 
+/* Establishes connection to UDP server. 
  * Input: fd is descriptor returned from socket.
  * 	  addr is socket address, len is its size.
  * Output: 0 on success, -1 if fails.
@@ -113,21 +121,19 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len){
 	struct sockaddr_in cliaddr, servaddr;	
 	int n, bytes_sent;
 	//TODO: figure out where we initialize packets
-	sock352_pkt_hdr_t  send;
-	sock352_pkt_hdr_t  receive;
+	sock352_pkt_hdr_t * send = (sock352_pkt_hdr_t *)malloc(sizeof(sock352_pkt_hdr_t));
+	sock352_pkt_hdr_t * receive = (sock352_pkt_hdr_t *)malloc(sizeof(sock352_pkt_hdr_t));
+
 	//transfer addr data to sockaddr
 	
 	bzero(&servaddr, sizeof(servaddr));
 
 	servaddr.sin_family = AF_INET;
-	servaddr.sin_port = htons(addr->sin_port);
-	char* ad = "128.6.13.175"; //ip of kill.cs.rutgers.edu
-	servaddr.sin_addr.s_addr = inet_addr(ad);
+	servaddr.sin_port = addr->sin_port;
+	servaddr.sin_addr.s_addr = addr->sin_addr.s_addr;
 
-
-	global_status->serv_port = htons(addr->sin_port); //sin_port is UDP port number
-	send.flags = SOCK352_SYN;
-
+	global_status->serv_port = addr->sin_port; //sin_port is UDP port number
+	send->flags = SOCK352_SYN;
 
 	bytes_sent = sendto(fd, &send, sizeof(send), 0, (struct sockaddr * ) &servaddr, sizeof(servaddr));
 
@@ -139,13 +145,15 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len){
 
 	n = recvfrom(fd, &receive, sizeof(receive), 0, NULL, NULL);
 
-	if(send.flags == (SOCK352_SYN | SOCK352_ACK)){
+	if(send->flags == (SOCK352_SYN | SOCK352_ACK)){
 		printf("Success\n\n");
 
 	}else{
 		printf("just syn, need syn ack\n\n");
 	}
 
+	free(send);
+	free(receive);
 	return connect(fd, (struct sockaddr *) &cliaddr, sizeof(cliaddr));
 }
 
@@ -199,20 +207,19 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len){
 	bzero(&servaddr, sizeof(servaddr));
 
 	servaddr.sin_family = AF_INET;
-	servaddr.sin_port = htons(addr->sin_port);
-	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+	servaddr.sin_port = addr->sin_port;
+	servaddr.sin_addr.s_addr = addr->sin_addr.s_addr;
 	socklen_t mylen = sizeof(cliaddr);
 	
-	sock352_pkt_hdr_t mybuff[sizeof(sock352_pkt_hdr_t)];
+	sock352_pkt_hdr_t * mybuff = (sock352_pkt_hdr_t *)malloc(sizeof(sock352_pkt_hdr_t));
+
 	int mybufflen = sizeof(mybuff);
 	
 	int n;
 
 	n = recvfrom(_fd, mybuff, mybufflen, 0, (struct sockaddr *) &cliaddr,  &mylen);
 
-	//printf("FD: %d, addr port: %d, addrl: %d", _fd, servaddr.sin_port, servaddr.sin_addr.s_addr);	
-	//receive packet. stored in mybuff.
-	//set up ack and seq numbers
+	/* receive packet. stored in mybuff. set up ack and seq numbers */
 	if(mybuff->flags == SOCK352_SYN){
 		mybuff->flags = (SOCK352_SYN | SOCK352_ACK);
 
@@ -221,11 +228,17 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len){
 		return 1;
 	}
 	//create empty list of fragments
-		
+	
+	free(mybuff);
 	return accept(_fd, (struct sockaddr * ) &servaddr, (int * ) &mylen);
 }
 
-/* */
+/* read accepts incoming packets from client, validates sequence numbers,
+ * and closes connect when relevant flag is finished. Additionally, sends
+ * acknowledgement when packet is received.
+ *
+ * note: receives one packet at a time.
+ */
 int sock352_read(int fd, void *buf, int count){
 	pthread_mutex_lock(&global_status->mutex);
 
@@ -239,6 +252,7 @@ int sock352_read(int fd, void *buf, int count){
 	int bytes_sent = 0;
 	int len = sizeof(global_status->cliaddr);
 	fragment * frag = (fragment *)malloc(sizeof(fragment));
+	if(!frag) exit(-1);
 
 	// receive packet
 	bytes_read = recvfrom(fd, frag, sizeof(fragment), 0, (struct sockaddr *)&global_status->cliaddr, &len);
@@ -246,6 +260,10 @@ int sock352_read(int fd, void *buf, int count){
 	if(bytes_read < 0){
 		printf("error in file: %s in the function: %s on line %d\n", __FILE__, __FUNCTION__, __LINE__);
 		return -1;
+	}
+
+	if(frag->packet.flags == SOCK352_FIN){
+		return 0;
 	}
 
 	// increment seq num and set flag ack
@@ -260,10 +278,22 @@ int sock352_read(int fd, void *buf, int count){
     }	
 
 	pthread_mutex_unlock(&global_status->mutex);
+	free(frag);
 	return read(fd, (void * ) &buf, count);
 }
 
+/*
+ * called by client, sents up sequence numbers accordingly, sends packet, and waits
+ * until acknowledgement is received before it continues. handles timeout with
+ * setsockopt function.
+ *
+ * note: sends one packet at at time.
+ */
 int sock352_write(int fd, void *buf, int count){
+
+	struct timeval tv;
+	tv.tv_sec = 0.2;  /* 30 Secs Timeout */
+	setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
 
 	if((char *) buf == NULL){
         printf("Buffer is null, cannot write.\n");
@@ -277,13 +307,16 @@ int sock352_write(int fd, void *buf, int count){
     fragment * sendfrag = (fragment *)malloc(sizeof(fragment));
     fragment * recvfrag = (fragment *)malloc(sizeof(fragment));
 
+    if(!sendfrag) exit(-1);
+    if(!recvfrag) exit(-1);
+
     strcpy(sendfrag->data, buf);
     sendfrag->packet.sequence_no = global_status->seq_num;
 
     global_status->seq_num++;
 
     while(!fragbool){
-            bytes_sent = sendto(fd, &send, sizeof(send), 0, (struct sockaddr * )&global_status->servaddr, sizeof(global_status->servaddr));
+	        bytes_sent = sendto(fd, &send, sizeof(send), 0, (struct sockaddr * )&global_status->servaddr, sizeof(global_status->servaddr));
             if(bytes_sent < 0){
                     printf("Error sending in File: %s, Line %d\n",  __FILE__ , __LINE__);
                     return -1;
@@ -291,16 +324,29 @@ int sock352_write(int fd, void *buf, int count){
 
             recvfrom(fd, &recvfrag, sizeof(recvfrag), 0, NULL, NULL);
 
-            if((recvfrag->packet.sequence_no != (global_status->seq_num)) && (recvfrag->packet.flags == SOCK352_ACK)){
+            if((recvfrag->packet.sequence_no != (global_status->seq_num)) && (recvfrag->packet.flags != SOCK352_ACK)){
                     continue;
             }
             global_status->seq_num++;
-            fragbool = 1;
+            fragbool = 1;	
     }
     pthread_mutex_unlock(&global_status->mutex);
+    free(sendfrag);
+    free(recvfrag);
 	return write(fd, (void *) &buf, count);
 }
 
+/* sends fragment with fin flag set to close connection */
 int sock352_close(int fd){
+
+    fragment * sendfrag = (fragment *)malloc(sizeof(fragment));
+    sendfrag->packet.flags = SOCK352_FIN;
+
+	if(sendto(fd, &sendfrag, sizeof(sendfrag), 0, (struct sockaddr * )&global_status->servaddr, 
+		sizeof(global_status->servaddr)) < 0){
+		return -1;
+	}	
+
+	free(sendfrag);
 	return close(fd);
 }
