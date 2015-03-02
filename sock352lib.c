@@ -1,7 +1,7 @@
 #include "sock352.h"
 #include "sock352lib.h"
 
-conn_status *  global_status; // = (conn_status *)malloc(sizeof(conn_status));
+conn_status * global_status = NULL;
 
 sock352_pkt_hdr_t * init_packet_hdr(uint32_t clientPort, in_port_t destinationPort){
 	sock352_pkt_hdr_t  * estConnection;
@@ -217,10 +217,8 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len){
 		mybuff->flags = (SOCK352_SYN | SOCK352_ACK);
 
 		sendto(_fd, mybuff, n, 0, (struct sockaddr * ) &cliaddr, sizeof(cliaddr));
-	}
-	else{
+	} else {
 		return 1;
-
 	}
 	//create empty list of fragments
 		
@@ -234,29 +232,31 @@ int sock352_read(int fd, void *buf, int count){
 	if(fd < 0){ return -1; }
 
 	if(global_status.stat == UNCONNECTED){
-		//return error
+		//return error or wait
 	}
 
 	int bytes_read = 0;
-	fragment frag = (fragment *)malloc(sizeof(fragment));
-
+	int bytes_sent = 0;
+	fragment * frag = (fragment *)malloc(sizeof(fragment));
 
 	// receive packet
-	bytes_read = recvfrom(fd, frag, sizeof(frag), 0, global_status->cliaddr, sizeof(global_status->cliaddr));
+	bytes_read = recvfrom(fd, frag, sizeof(fragment), 0, global_status->cliaddr, sizeof(global_status->cliaddr));
 
 	if(bytes_read < 0){
-		//return error;
+		printf("error in file: %s in the function: %s on line %d\n", __FILE__, __FUNCTION__, __LINE__);
+		return -1;
 	}
 
-	// increment seq num and flag ack
+	// increment seq num and set flag ack
+	conn_status->seq_num++;
+	frag->packet = SOCK352_ACK;
 
 	//and send back
-
-	if(bytes_read < 0){
-		//return error;
-	}
-
-
+	bytes_sent = sendto(fd, &frag, sizeof(fragment), 0, (struct sockaddr * ) &global_status->servaddr, sizeof(global_status->addr));
+    if(bytes_sent < 0){
+	    printf("Error sending in File: %s, Line %d\n",  __FILE__ , __LINE__);
+        return -1;
+    }	
 
 	pthread_mutex_unlock(&global_status->mutex);
 	return read(fd, (void * ) &buf, count);
@@ -273,11 +273,11 @@ int sock352_write(int fd, void *buf, int count){
 
         pthread_mutex_lock(&connection->mutex);
 
-        fragment sendfrag = (fragment *) malloc(sizeof(fragment));
-        fragment recvfrag = (fragment *) malloc(sizeof(fragment));
+        fragment * sendfrag = (fragment *)malloc(sizeof(fragment));
+        fragment * recvfrag = (fragment *)malloc(sizeof(fragment));
 
         sendfrag->data = buf;
-        sendfrag->packet->seq_no = global_status->seq_num;
+        sendfrag->packet->sequence_no = global_status->seq_num;
 
         global_status->seq_num++;
 
