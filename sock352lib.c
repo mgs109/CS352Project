@@ -44,6 +44,7 @@ int sock352_init(int udp_port){
 	global_status->cli_port = 0;
 	global_status->serv_port = 0;
 	global_status->cid = 0;
+	global_status->seq_num = 0;
 	global_status->stat = UNCONNECTED;
 
 	return SOCK352_SUCCESS;
@@ -61,6 +62,7 @@ int sock352_init2(int remote_port, int local_port){
  	global_status->cli_port = 0;
 	global_status->serv_port = 0;
 	global_status->cid = 0;
+	global_status->seq_num = 0;
 	global_status->stat = UNCONNECTED;
 
  	return SOCK352_SUCCESS;
@@ -224,12 +226,80 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len){
 		
 	return accept(_fd, (struct sockaddr * ) &servaddr, (int * ) &mylen);
 }
-int sock352_close(int fd){
-	return close(fd);
-}
+
+/* */
 int sock352_read(int fd, void *buf, int count){
+	pthread_mutex_lock(&global_status->mutex);
+
+	if(fd < 0){ return -1; }
+
+	if(global_status.stat == UNCONNECTED){
+		//return error
+	}
+
+	int bytes_read = 0;
+	fragment frag = (fragment *)malloc(sizeof(fragment));
+
+
+	// receive packet
+	bytes_read = recvfrom(fd, frag, sizeof(frag), 0, global_status->cliaddr, sizeof(global_status->cliaddr));
+
+	if(bytes_read < 0){
+		//return error;
+	}
+
+	// increment seq num and flag ack
+
+	//and send back
+
+	if(bytes_read < 0){
+		//return error;
+	}
+
+
+
+	pthread_mutex_unlock(&global_status->mutex);
 	return read(fd, (void * ) &buf, count);
 }
+
 int sock352_write(int fd, void *buf, int count){
+
+	if((char *) buf == NULL){
+        printf("Buffer is null, cannot write.\n");
+        return 0;
+    }
+
+        int bytes_sent = -1, fragbool = 0;
+
+        pthread_mutex_lock(&connection->mutex);
+
+        fragment sendfrag = (fragment *) malloc(sizeof(fragment));
+        fragment recvfrag = (fragment *) malloc(sizeof(fragment));
+
+        sendfrag->data = buf;
+        sendfrag->packet->seq_no = global_status->seq_num;
+
+        global_status->seq_num++;
+
+        while(!fragbool){
+                bytes_sent = sendto(fd, &send, sizeof(send), 0, (struct sockaddr * ) &servaddr, sizeof(servaddr));
+                if(bytes_sent < 0){
+                        printf("Error sending in File: %s, Line %d\n",  __FILE__ , __LINE__);
+                        return -1;
+                }
+
+                recvfrom(fd, &recvfrag, sizeof(recvfrag), 0, NULL, NULL);
+
+                if((recvfrag->packet->seq_no != (global_status->seq_no)) && (recvfrag->packet->flags == SOCK352_ACK)){
+                        continue;
+                }
+                global_status->seq_no++;
+                fragbool = 1;
+        }
+    pthread_mutex_unlock(&connection->mutex);
 	return write(fd, (void *) &buf, count);
+}
+
+int sock352_close(int fd){
+	return close(fd);
 }

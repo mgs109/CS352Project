@@ -4,6 +4,8 @@
 #include <strings.h>
 #include <arpa/inet.h>
 
+#define DATA_SIZE 1024
+
 enum status {
 	CONNECTED,
 	UNCONNECTED,
@@ -14,14 +16,22 @@ enum status {
 typedef enum status status; 
 
 /* global structure that holds information for the connection */
-typedef struct { 
+struct conn_status { 
 	pthread_mutex_t mutex;	
 	int cli_port;
 	int serv_port;
 	int cid;		//connection id, incremented everytime we adda  connection
 	status stat;
-} conn_status;
+};
 
-//typedef struct conn_status conn_status;
+typedef struct conn_status conn_status;
+
+struct fragment {
+	int size;
+	sock352_pkt_hdr_t packet;
+	char data[DATA_SIZE];	
+};
+
+typedef struct fragment fragment;
 
 void destroy_conn(conn_status);
