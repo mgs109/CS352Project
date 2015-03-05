@@ -117,44 +117,37 @@ int sock352_socket(int domain, int type, int protocol){
  * Output: 0 on success, -1 if fails.
  */
 int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len){
+	int n;
+	struct sockaddr_in servaddr,cliaddr;
 
-	struct sockaddr_in cliaddr, servaddr;	
-	int n, bytes_sent;
-	//TODO: figure out where we initialize packets
 	sock352_pkt_hdr_t * send = (sock352_pkt_hdr_t *)malloc(sizeof(sock352_pkt_hdr_t));
-	sock352_pkt_hdr_t * receive = (sock352_pkt_hdr_t *)malloc(sizeof(sock352_pkt_hdr_t));
+	sock352_pkt_hdr_t * recv = (sock352_pkt_hdr_t *)malloc(sizeof(sock352_pkt_hdr_t));
 
-	//transfer addr data to sockaddr
-	
-	bzero(&servaddr, sizeof(servaddr));
+	fd=socket(AF_INET,SOCK_DGRAM,0);
 
+	bzero(&servaddr,sizeof(servaddr));
 	servaddr.sin_family = AF_INET;
-	servaddr.sin_port = addr->sin_port;
-	servaddr.sin_addr.s_addr = addr->sin_addr.s_addr;
+	servaddr.sin_addr.s_addr=inet_addr("128.6.13.229");
+	servaddr.sin_port=htons(22000);
 
-	global_status->serv_port = addr->sin_port; //sin_port is UDP port number
+	/*Send SYN packet*/
 	send->flags = SOCK352_SYN;
+	sendto(fd,send,sizeof(send),0,(struct sockaddr *)&servaddr,sizeof(servaddr));
 
-	bytes_sent = sendto(fd, &send, sizeof(send), 0, (struct sockaddr * ) &servaddr, sizeof(servaddr));
-
-	if(bytes_sent < 0){
-		printf("sendto error\n");
-	} else {
-		printf("%d bytes sentn", bytes_sent);
-	}
-
-	n = recvfrom(fd, &receive, sizeof(receive), 0, NULL, NULL);
-
-	if(send->flags == (SOCK352_SYN | SOCK352_ACK)){
-		printf("Success\n\n");
-
+	/*Receive SYN ACK packet*/
+	n = recvfrom(fd, recv, sizeof(recv), 0, NULL, NULL);
+	if(recv->flags == (SOCK352_SYN | SOCK352_ACK)){
+		/*Send ACK packet*/
+		send->flags = SOCK352_ACK;
+		sendto(fd,send,sizeof(send),0,(struct sockaddr *)&servaddr,sizeof(servaddr));
 	}else{
-		printf("just syn, need syn ack\n\n");
+		printf("Failure to receive SYN ACK packet in file: %s, line: %d\n", __FILE__, __LINE__);
+		exit(1);
 	}
 
-	free(send);
-	free(receive);
-	return connect(fd, (struct sockaddr *) &cliaddr, sizeof(cliaddr));
+
+	printf("Success, 3 way handshake complete.\n");
+	return SOCK352_SUCCESS;
 }
 
 /* Assigns protocol address to socket.
@@ -201,36 +194,45 @@ int sock352_listen(int fd, int n){
  * Output: non-neg descriptor if OK, -1 if error.
  */
 int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len){
-	//transfer addr data
-
-	struct sockaddr_in cliaddr, servaddr;	
-	bzero(&servaddr, sizeof(servaddr));
-
-	servaddr.sin_family = AF_INET;
-	servaddr.sin_port = addr->sin_port;
-	servaddr.sin_addr.s_addr = addr->sin_addr.s_addr;
-	socklen_t mylen = sizeof(cliaddr);
-	
-	sock352_pkt_hdr_t * mybuff = (sock352_pkt_hdr_t *)malloc(sizeof(sock352_pkt_hdr_t));
-
-	int mybufflen = sizeof(mybuff);
-	
 	int n;
+	struct sockaddr_in servaddr,cliaddr;
+	socklen_t leng;
+	sock352_pkt_hdr_t * mybuff;
 
-	n = recvfrom(_fd, mybuff, mybufflen, 0, (struct sockaddr *) &cliaddr,  &mylen);
+	_fd=socket(AF_INET,SOCK_DGRAM,0);
 
-	/* receive packet. stored in mybuff. set up ack and seq numbers */
-	if(mybuff->flags == SOCK352_SYN){
-		mybuff->flags = (SOCK352_SYN | SOCK352_ACK);
+	mybuff = (sock352_pkt_hdr_t *)malloc(sizeof(sock352_pkt_hdr_t));
 
-		sendto(_fd, mybuff, n, 0, (struct sockaddr * ) &cliaddr, sizeof(cliaddr));
-	} else {
-		return 1;
+	bzero(&servaddr,sizeof(servaddr));
+	servaddr.sin_family = AF_INET;
+	servaddr.sin_addr.s_addr=htonl(INADDR_ANY);
+	servaddr.sin_port=htons(22000);
+
+	/*Bind the port*/
+	if(bind(_fd,(struct sockaddr *)&servaddr,sizeof(servaddr)) != 0){
+		printf("Bind failed in file: %s, at line: %d\n", __FILE__, __LINE__);
+		exit(1);
 	}
-	//create empty list of fragments
-	
-	free(mybuff);
-	return accept(_fd, (struct sockaddr * ) &servaddr, (int * ) &mylen);
+
+	/*Receive SYN packet*/
+	leng = sizeof(cliaddr);
+	n = recvfrom(_fd,mybuff,sizeof(mybuff),0,(struct sockaddr *)&cliaddr,&leng);
+	if(mybuff->flags == SOCK352_SYN){	
+		/*Send SYN ACK packet*/
+		mybuff->flags = (SOCK352_SYN | SOCK352_ACK);
+		sendto(_fd,mybuff,n,0,(struct sockaddr *)&cliaddr,sizeof(cliaddr));
+	}else{
+		printf("Failure to receive SYN packet\n");
+		exit(1);
+	}
+
+	/*Receive ACK packet*/
+	n = recvfrom(_fd,mybuff,sizeof(mybuff),0,(struct sockaddr *)&cliaddr,&leng);
+	if(mybuff->flags == SOCK352_ACK){
+		printf("Success, 3 way handshake complete\n");
+	}
+
+	return SOCK352_SUCCESS;
 }
 
 /* read accepts incoming packets from client, validates sequence numbers,
