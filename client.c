@@ -234,6 +234,7 @@ int main(int argc, char *argv[]) {
 	while ( (total_bytes < file_size) &&   /* the main loop checks both if we've sent the whole file*/
 			(! end_of_file) ) {            /* or there is some other error */
 
+		printf("%d\n", bytes_read);
 		bytes_read = read(fd,buffer,BUFFER_SIZE);  /* read from the file */
 		if (bytes_read > 0) {                      /* check we sent something */
 			total_bytes += bytes_read ;

@@ -29,6 +29,7 @@ struct conn_status {
 	struct sockaddr_in cliaddr;	
 	struct sockaddr_in servaddr;	
 	status stat;
+	sockaddr_sock352_t * connaddr;
 };
 
 typedef struct conn_status conn_status;

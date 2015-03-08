@@ -166,10 +166,10 @@ int main(int argc, char *argv[]) {
 		}
 		listen_fd = sock352_socket(AF_CS352,SOCK_STREAM,0);
 
-		/* the destination port overrides the udp port setting */
+		/* the destination port overrides the udp port setting 
 		if (remote_port != 0) {
 			udp_port = remote_port;
-		}
+		}*/
 
 		memset(&server_addr,0,sizeof(server_addr));
 		server_addr.sin_family = AF_CS352;
@@ -210,6 +210,7 @@ int main(int argc, char *argv[]) {
 		/* loop until we either get the whole file or there is an error */
 		while ( (total_bytes < file_size) &&
 				(! socket_closed)) {
+			printf("%d\n", bytes_read);
 			bytes_read = sock352_read(connection_fd,buffer,BUFFER_SIZE);
 			if (bytes_read > 0) {
 				total_bytes += bytes_read;
