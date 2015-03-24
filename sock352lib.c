@@ -123,7 +123,7 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len){
 	sock352_pkt_hdr_t * send = (sock352_pkt_hdr_t *)malloc(sizeof(sock352_pkt_hdr_t));
 	sock352_pkt_hdr_t * recv = (sock352_pkt_hdr_t *)malloc(sizeof(sock352_pkt_hdr_t));
 
-	fd=socket(AF_INET,SOCK_DGRAM,0);
+//	fd=socket(AF_INET,SOCK_DGRAM,0);
 
 	bzero(&servaddr,sizeof(servaddr));
 	servaddr.sin_family = AF_INET;
@@ -149,6 +149,9 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len){
 
 
 	printf("Success, 3 way handshake complete.\n");
+
+
+	printf("Socket: %d\n", fd);
 	return  SOCK352_SUCCESS;    //connect(fd, (struct sockaddr *) &servaddr, sizeof(servaddr));
 }
 
@@ -202,7 +205,7 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len){
 	socklen_t leng;
 	sock352_pkt_hdr_t * mybuff;
 
-	_fd=socket(AF_INET,SOCK_DGRAM,0);
+//	_fd=socket(AF_INET,SOCK_DGRAM,0);
 
 	mybuff = (sock352_pkt_hdr_t *)malloc(sizeof(sock352_pkt_hdr_t));
 
@@ -210,9 +213,6 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len){
 	servaddr.sin_family = AF_INET;
 	servaddr.sin_addr.s_addr=htonl(INADDR_ANY);
 	servaddr.sin_port = global_status->connaddr->sin_port;
-
-
-	printf("global port: %u, address: %u, local cli port: %u, socket: %u\n", ntohs(global_status->connaddr->sin_port), ntohl(global_status->connaddr->sin_addr.s_addr), ntohs(cliaddr.sin_port), _fd);
 
 	/*Bind the port*/
 	if(bind(_fd,(struct sockaddr *)&servaddr,sizeof(servaddr)) != 0){
@@ -222,10 +222,7 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len){
 
 
 	global_status->cliaddr = cliaddr;
-/*	global_status->cliaddr.sin_port = global_status->connaddr->sin_port;
-	global_status->cliaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	global_status->cliaddr.sin_family = AF_INET;*/
-
+	
 	/*Receive SYN packet*/
 	leng = sizeof(cliaddr);
 	n = recvfrom(_fd,mybuff,sizeof(mybuff),0,(struct sockaddr *)&cliaddr,&leng);
@@ -243,7 +240,7 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len){
 	if(mybuff->flags == SOCK352_ACK){
 		printf("Success, 3 way handshake complete\n");
 	}
-
+	printf("Socket: %d\n", _fd);
 	return _fd;   //accept(_fd, (struct sockaddr *)&servaddr, sizeof(servaddr));
 }
 
@@ -256,19 +253,18 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len){
 int sock352_read(int fd, void *buf, int count){
 	int bytes_read;
 	socklen_t leng;
-	fragment * frag; 
+	fragment * frag;
+	fragment retfrag;
 
-	frag = (fragment *)malloc(sizeof(fragment));
+	frag = (fragment *) &retfrag;
 
-	if(strlen(buf) == 0){
-		return count;
-	}
-	printf("global cli port in read: %u socket: %u\n", ntohs(global_status->cliaddr.sin_port), fd);
+	//printf("global cli port in read: %u socket: %u\n", ntohs(global_status->cliaddr.sin_port), fd);
 	// receive packet
 	leng = sizeof(global_status->cliaddr);
-	bytes_read = recvfrom(fd,frag,sizeof(frag),0,(struct sockaddr *)&global_status->cliaddr,&leng);
+	bytes_read = recvfrom(fd,frag,sizeof(fragment),0,(struct sockaddr *)&global_status->cliaddr,&leng);
 
-	perror("Error: ");
+
+	memcpy(buf, frag->data, frag->size);
 
 	if(bytes_read < 0){
 		printf("error in file: %s  on line %d, bytes: %d, leng: %d\n", __FILE__,  __LINE__, bytes_read, leng);
@@ -280,15 +276,18 @@ int sock352_read(int fd, void *buf, int count){
 		return 0;
 	}
 
+//	printf("read buf %s\n", buf);
+
+
 	//send ACK
 	frag->packet.flags = SOCK352_ACK;
 	sendto(fd, frag, bytes_read, 0, (struct sockaddr * ) &global_status->cliaddr, sizeof(global_status->cliaddr));
 
-	free(frag);
 
 
-	printf("returning from read\n");
-	return bytes_read  + count;
+	printf("returning from read. bytes read: %d, count: %d\n", bytes_read, count);
+
+	return  frag->size;
 
 }
 
@@ -300,12 +299,10 @@ int sock352_read(int fd, void *buf, int count){
  * note: sends one packet at at time.
  */
 int sock352_write(int fd, void *buf, int count){
-//	fd=socket(AF_INET,SOCK_DGRAM,0);
-/*
+
 	struct timeval tv;
 	tv.tv_sec = 0.2;  
 	setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
-*/
 
 
 	if((char *) buf == NULL){
@@ -315,47 +312,37 @@ int sock352_write(int fd, void *buf, int count){
 
 	int bytes_sent = 0, fragbool = 0;
 
-
-	fragment * sendfrag = (fragment *)malloc(sizeof(fragment));
-	fragment * recvfrag = (fragment *)malloc(sizeof(fragment));
+	fragment * sendfrag = (fragment * )malloc(sizeof(fragment));
+	fragment * recvfrag = (fragment * )malloc(sizeof(fragment));
 	
-	if(strlen(buf) == 0){
-		printf("size of buf is 0\n");
-		return count;
-
-	}
-
-	strcpy(sendfrag->data, buf);
+	memcpy(sendfrag->data, buf, count);
+	sendfrag->file_size = buf;
+	sendfrag->size = count;
+	
 	sendfrag->packet.sequence_no = global_status->seq_num;
-
-	//	printf("\n\n%s\n\n", buf);
-
 	global_status->seq_num++;
 	while(fragbool == 0){
-		printf("buf size != 0\n");
-		bytes_sent = sendto(fd, sendfrag, sizeof(sendfrag), 0, (struct sockaddr * )&global_status->servaddr, sizeof(global_status->servaddr));
+		bytes_sent = sendto(fd, sendfrag, sizeof(fragment), 0, (struct sockaddr * )&global_status->servaddr, sizeof(global_status->servaddr));
 		printf("write sent\n");   
 		if(bytes_sent < 0){
 			printf("Error sending in File: %s, Line %d\n",  __FILE__ , __LINE__);
 			return -1;
 		}
 
-		recvfrom(fd, recvfrag, sizeof(recvfrag), 0, NULL, NULL);
+		recvfrom(fd, recvfrag, sizeof(fragment), 0, NULL, NULL);
 
-		if((recvfrag->packet.sequence_no != (global_status->seq_num - 1)) && (recvfrag->packet.flags != SOCK352_ACK)){
+		if((recvfrag->packet.sequence_no != global_status->seq_num - 1) && (recvfrag->packet.flags != SOCK352_ACK)){
 			printf("packet seq numbers or ack wrong\n");
 			continue;     
 		}
 		global_status->seq_num++;
 		fragbool = 1;	
 	}
+
 	free(sendfrag);
 	free(recvfrag);
-	printf("returning from write\n");
-	return bytes_sent + count;
-
-
-
+	printf("returning from write. bytes sent: %d, count: %d\n", bytes_sent, count);
+	return count;
 }
 
 /* sends fragment with fin flag set to close connection */

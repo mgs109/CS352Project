@@ -8,7 +8,7 @@
 #include <string.h>
 #include <arpa/inet.h>
 
-#define DATA_SIZE 1024
+#define DATA_SIZE 10000
 
 enum status {
 	CONNECTED,
@@ -37,6 +37,7 @@ typedef struct conn_status conn_status;
 struct fragment {
 	int size;
 	sock352_pkt_hdr_t packet;
+	uint32_t file_size;
 	char data[DATA_SIZE];	
 };
 
