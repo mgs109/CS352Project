@@ -66,8 +66,8 @@ int sock352_init2(int remote_port, int local_port){
 
 	global_status = (conn_status *)malloc(sizeof(conn_status));
 
- 	global_status->cli_port = 0;
-	global_status->serv_port = 0;
+ 	global_status->cli_port = local_port;
+	global_status->serv_port = remote_port;
 	global_status->cid = 0;
 	global_status->seq_num = 0;
 	global_status->stat = UNCONNECTED;
@@ -75,6 +75,21 @@ int sock352_init2(int remote_port, int local_port){
  	return SOCK352_SUCCESS;
  
  }
+
+int sock352_init3(int remote_UDP_port, int local_UDP_port, char * environment_p[]){
+
+	global_status = (conn_status *)malloc(sizeof(conn_status));
+
+ 	global_status->cli_port = local_UDP_port;
+	global_status->serv_port = remote_UDP_port;
+	global_status->cid = 0;
+	global_status->seq_num = 0;
+	global_status->stat = UNCONNECTED;
+
+
+	return SOCK352_SUCCESS;
+}
+
 
 /*
  *  Not all combinations of socket family(domain) and socket type are valid. 
@@ -123,8 +138,6 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len){
 	sock352_pkt_hdr_t * send = (sock352_pkt_hdr_t *)malloc(sizeof(sock352_pkt_hdr_t));
 	sock352_pkt_hdr_t * recv = (sock352_pkt_hdr_t *)malloc(sizeof(sock352_pkt_hdr_t));
 
-//	fd=socket(AF_INET,SOCK_DGRAM,0);
-
 	bzero(&servaddr,sizeof(servaddr));
 	servaddr.sin_family = AF_INET;
 	servaddr.sin_addr.s_addr=addr->sin_addr.s_addr;
@@ -147,12 +160,8 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len){
 		exit(1);
 	}
 
-
-	printf("Success, 3 way handshake complete.\n");
-
-
-	printf("Socket: %d\n", fd);
-	return  SOCK352_SUCCESS;    //connect(fd, (struct sockaddr *) &servaddr, sizeof(servaddr));
+	//printf("cliport: %u, globport %u", global_status->cliaddr.sin_port, global_status->connaddr->sin_port);
+	return  SOCK352_SUCCESS; 
 }
 
 /* Assigns protocol address to socket.
@@ -205,8 +214,6 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len){
 	socklen_t leng;
 	sock352_pkt_hdr_t * mybuff;
 
-//	_fd=socket(AF_INET,SOCK_DGRAM,0);
-
 	mybuff = (sock352_pkt_hdr_t *)malloc(sizeof(sock352_pkt_hdr_t));
 
 	bzero(&servaddr,sizeof(servaddr));
@@ -219,13 +226,13 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len){
 		printf("Bind failed in file: %s, at line: %d\n", __FILE__, __LINE__);
 		exit(1);
 	}
-
-
-	global_status->cliaddr = cliaddr;
 	
 	/*Receive SYN packet*/
 	leng = sizeof(cliaddr);
 	n = recvfrom(_fd,mybuff,sizeof(mybuff),0,(struct sockaddr *)&cliaddr,&leng);
+
+	global_status->cliaddr = cliaddr;
+
 	if(mybuff->flags == SOCK352_SYN){	
 		/*Send SYN ACK packet*/
 		mybuff->flags = (SOCK352_SYN | SOCK352_ACK);
@@ -238,10 +245,8 @@ int sock352_accept(int _fd, sockaddr_sock352_t *addr, int *len){
 	/*Receive ACK packet*/
 	n = recvfrom(_fd,mybuff,sizeof(mybuff),0,(struct sockaddr *)&cliaddr,&leng);
 	if(mybuff->flags == SOCK352_ACK){
-		printf("Success, 3 way handshake complete\n");
 	}
-	printf("Socket: %d\n", _fd);
-	return _fd;   //accept(_fd, (struct sockaddr *)&servaddr, sizeof(servaddr));
+	return _fd;   
 }
 
 /* read accepts incoming packets from client, validates sequence numbers,
@@ -258,11 +263,9 @@ int sock352_read(int fd, void *buf, int count){
 
 	frag = (fragment *) &retfrag;
 
-	//printf("global cli port in read: %u socket: %u\n", ntohs(global_status->cliaddr.sin_port), fd);
 	// receive packet
-	leng = sizeof(global_status->cliaddr);
-	bytes_read = recvfrom(fd,frag,sizeof(fragment),0,(struct sockaddr *)&global_status->cliaddr,&leng);
-
+	leng = sizeof(global_status->servaddr);
+	bytes_read = recvfrom(fd, frag, sizeof(fragment), 0, (struct sockaddr *) &global_status->servaddr, &leng);
 
 	memcpy(buf, frag->data, frag->size);
 
@@ -276,18 +279,13 @@ int sock352_read(int fd, void *buf, int count){
 		return 0;
 	}
 
-//	printf("read buf %s\n", buf);
-
-
 	//send ACK
 	frag->packet.flags = SOCK352_ACK;
-	sendto(fd, frag, bytes_read, 0, (struct sockaddr * ) &global_status->cliaddr, sizeof(global_status->cliaddr));
+	bytes_read = frag->size;
 
+	sendto(fd, frag, bytes_read, 0, (struct sockaddr * ) &global_status->servaddr, sizeof(global_status->servaddr));
 
-
-	printf("returning from read. bytes read: %d, count: %d\n", bytes_read, count);
-
-	return  frag->size;
+	return  bytes_read;
 
 }
 
@@ -304,26 +302,30 @@ int sock352_write(int fd, void *buf, int count){
 	tv.tv_sec = 0.2;  
 	setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
 
-
 	if((char *) buf == NULL){
 		printf("Buffer is null in file: %s, line: %d\n", __FILE__, __LINE__);
 		return 0;
 	}
 
-	int bytes_sent = 0, fragbool = 0;
+	int bytes_sent = 0, fragbool = 0, leng;
 
 	fragment * sendfrag = (fragment * )malloc(sizeof(fragment));
 	fragment * recvfrag = (fragment * )malloc(sizeof(fragment));
-	
+
+	//Set up send frag data
 	memcpy(sendfrag->data, buf, count);
 	sendfrag->file_size = buf;
 	sendfrag->size = count;
-	
+	sendfrag->packet.payload_len = count;
+	sendfrag->packet.source_port = global_status->connaddr->sin_port;	
+	sendfrag->packet.dest_port = global_status->connaddr->sin_port;
 	sendfrag->packet.sequence_no = global_status->seq_num;
 	global_status->seq_num++;
-	while(fragbool == 0){
-		bytes_sent = sendto(fd, sendfrag, sizeof(fragment), 0, (struct sockaddr * )&global_status->servaddr, sizeof(global_status->servaddr));
-		printf("write sent\n");   
+
+
+	bytes_sent = sendto(fd, sendfrag, sizeof(fragment), 0, (struct sockaddr * )&global_status->servaddr, sizeof(global_status->servaddr));
+	while(fragbool == 0){//not ack, sendto before the loop 
+
 		if(bytes_sent < 0){
 			printf("Error sending in File: %s, Line %d\n",  __FILE__ , __LINE__);
 			return -1;
@@ -331,17 +333,13 @@ int sock352_write(int fd, void *buf, int count){
 
 		recvfrom(fd, recvfrag, sizeof(fragment), 0, NULL, NULL);
 
-		if((recvfrag->packet.sequence_no != global_status->seq_num - 1) && (recvfrag->packet.flags != SOCK352_ACK)){
-			printf("packet seq numbers or ack wrong\n");
-			continue;     
-		}
+//		recvfrom(fd, recvfrag, sizeof(fragment), 0, (struct sockaddr *) &global_status->servaddr, sizeof(global_status->servaddr));
 		global_status->seq_num++;
 		fragbool = 1;	
 	}
 
 	free(sendfrag);
 	free(recvfrag);
-	printf("returning from write. bytes sent: %d, count: %d\n", bytes_sent, count);
 	return count;
 }
 
