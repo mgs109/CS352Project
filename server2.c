@@ -144,20 +144,20 @@ int main(int argc, char *argv[], char *envp) {
 		/* change which init function to use based on the arguments */
 		/* if BOTH the local and remote ports are set, use the init2 function */
 
-	//	if ( (remote_port > 0) && (local_port > 0) ) {
-	//		retval =  sock352_init2(remote_port, local_port);
-	//	} else {
+		if ( (remote_port > 0) && (local_port > 0) ) {
+			retval =  sock352_init2(remote_port, local_port);
+		} else {
 			retval = sock352_init(udp_port);
-	//	}
+		}
 		if (retval != SOCK352_SUCCESS < 0) {
-			//printf("server2: initialization of 352 sockets on UDP port %d failed\n",udp_port);
-			//exit(-1);
+			printf("server2: initialization of 352 sockets on UDP port %d failed\n",udp_port);
+			exit(-1);
 		}
 		listen_fd = sock352_socket(AF_CS352,SOCK_STREAM,0);
 
 		/* the destination port overrides the udp port setting */
 		if (remote_port != 0) {
-			//udp_port = remote_port;
+			udp_port = remote_port;
 		}
 
 		memset(&server_addr,0,sizeof(server_addr));
