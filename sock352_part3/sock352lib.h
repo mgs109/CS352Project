@@ -1,46 +1,46 @@
-/*
- * Copyright (c) 2015 Rutgers University and Richard P. Martin.
- * All rights reserved.
- *
- * Permission to use, copy, modify, and distribute this software and its
- * documentation for any purpose, without fee, and without written agreement is
- * hereby granted, provided that the following conditions are met:
- *
- *    1. Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *
- *    2. Redistributions in binary form must reproduce the above copyright
- *       notice, this list of conditions and the following disclaimer in the
- *       documentation and/or other materials provided with the distribution.
- *
- *    3. Neither the name of the University nor the names of its
- *       contributors may be used to endorse or promote products derived from
- *       this software without specific prior written permission.
- *
- * IN NO EVENT SHALL RUTGERS UNIVERSITY BE LIABLE TO ANY PARTY FOR DIRECT,
- * INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES ARISING OUT
- * OF THE USE OF THIS SOFTWARE AND ITS DOCUMENTATION, EVEN IF RUTGERS
- * UNIVERSITY HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * RUTGERS UNIVERSITY SPECIFICALLY DISCLAIMS ANY WARRANTIES,
- * INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
- * AND FITNESS FOR A PARTICULAR PURPOSE.  THE SOFTWARE PROVIDED HEREUNDER IS
- * ON AN "AS IS" BASIS, AND RUTGERS UNIVERSITY HAS NO OBLIGATION TO
- * PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
- *
- *
- * Author:                      Richard P. Martin
- * Version:                     1
- * Creation Date:				Wed Jan 28 15:41:32 EST 2015
- * Filename:					sock352lib.h
+/* authors: Mark Conley && Michael Sabbagh 
+ * section: 01
  */
-#ifndef SOCK352LIB_H_
-#define SOCK352LIB_H_
 
-#include <sys/types.h>
-#include <pthread.h>
-#include <endian.h>
-#include "sock352.h"
-#include "uthash.h"
+#include <errno.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <arpa/inet.h>
 
-#endif /* SOCK352LIB_H_ */
+#define DATA_SIZE 10000
+
+enum status {
+	CONNECTED,
+	UNCONNECTED,
+	WAITING,
+	BLOCKED
+};
+
+typedef enum status status; 
+
+/* global structure that holds information for the connection */
+struct conn_status { 
+	pthread_mutex_t mutex;	
+	int cli_port;
+	int serv_port;
+	int cid;		//connection id, incremented everytime we adda  connection
+	int seq_num;
+	struct sockaddr_in cliaddr;	
+	struct sockaddr_in servaddr;	
+	status stat;
+	sockaddr_sock352_t * connaddr;
+};
+
+typedef struct conn_status conn_status;
+
+struct fragment {
+	int size;
+	sock352_pkt_hdr_t packet;
+	uint32_t file_size;
+	char data[DATA_SIZE];	
+};
+
+typedef struct fragment fragment;
+
+void destroy_conn(conn_status);
