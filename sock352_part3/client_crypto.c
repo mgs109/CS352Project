@@ -507,6 +507,9 @@ int main(int argc, char *argv[], char *envp[]) {
 	  printf("client_crypto: reading nonce failed \n");
 	  return -1; 
 	}
+
+	
+	printf("read successful\n");
 	
 	/* send the encrypted the name of the file */
 	count = encrypted_write(dest_sock,buffer,strlen(buffer), 

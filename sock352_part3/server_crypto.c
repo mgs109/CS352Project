@@ -497,7 +497,7 @@ int main(int argc, char *argv[], char **envp) {
 		/* send back the nonce */
 		bw = sock352_write(connection_fd,nonce, crypto_box_NONCEBYTES);		
 		if (bw != crypto_box_NONCEBYTES) { 
-		  printf("server_crypto: write of nonce failed \n");
+		  printf("%dserver_crypto: write of nonce failed %d\n", bw, crypto_box_NONCEBYTES);
 		}
 		
 		count = decrypted_read(connection_fd,command_string_decrypt, BUFFER_SIZE,

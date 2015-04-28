@@ -143,14 +143,14 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len){
 	servaddr.sin_addr.s_addr=addr->sin_addr.s_addr;
 	servaddr.sin_port=addr->sin_port;
 
-	global_status->servaddr = servaddr;
-
 	/*Send SYN packet*/
 	send->flags = SOCK352_SYN;
 	sendto(fd,send,sizeof(send),0,(struct sockaddr *)&servaddr,sizeof(servaddr));
 
 	/*Receive SYN ACK packet*/
 	n = recvfrom(fd, recv, sizeof(recv), 0, NULL, NULL);
+	
+
 	if(recv->flags == (SOCK352_SYN | SOCK352_ACK)){
 		/*Send ACK packet*/
 		send->flags = SOCK352_ACK;
@@ -160,7 +160,8 @@ int sock352_connect(int fd, sockaddr_sock352_t *addr, socklen_t len){
 		exit(1);
 	}
 
-	//printf("cliport: %u, globport %u", global_status->cliaddr.sin_port, global_status->connaddr->sin_port);
+	global_status->servaddr = servaddr;
+	
 	return  SOCK352_SUCCESS; 
 }
 
@@ -268,6 +269,7 @@ int sock352_read(int fd, void *buf, int count){
 	bytes_read = recvfrom(fd, frag, sizeof(fragment), 0, (struct sockaddr *) &global_status->servaddr, &leng);
 
 	memcpy(buf, frag->data, frag->size);
+	printf("Read socket: %d\n", fd);
 
 	if(bytes_read < 0){
 		printf("error in file: %s  on line %d, bytes: %d, leng: %d\n", __FILE__,  __LINE__, bytes_read, leng);
@@ -307,6 +309,8 @@ int sock352_write(int fd, void *buf, int count){
 		return 0;
 	}
 
+	printf("Write socket: %d\n", fd);
+
 	int bytes_sent = 0, fragbool = 0, leng;
 
 	fragment * sendfrag = (fragment * )malloc(sizeof(fragment));
@@ -322,8 +326,15 @@ int sock352_write(int fd, void *buf, int count){
 	sendfrag->packet.sequence_no = global_status->seq_num;
 	global_status->seq_num++;
 
-
+	if(count != 24){
 	bytes_sent = sendto(fd, sendfrag, sizeof(fragment), 0, (struct sockaddr * )&global_status->servaddr, sizeof(global_status->servaddr));
+	}else{
+
+	bytes_sent = sendto(fd, sendfrag, sizeof(fragment), 0, (struct sockaddr * )&global_status->cliaddr, sizeof(global_status->cliaddr));
+
+}
+
+
 	while(fragbool == 0){//not ack, sendto before the loop 
 
 		if(bytes_sent < 0){
@@ -333,7 +344,6 @@ int sock352_write(int fd, void *buf, int count){
 
 		recvfrom(fd, recvfrag, sizeof(fragment), 0, NULL, NULL);
 
-//		recvfrom(fd, recvfrag, sizeof(fragment), 0, (struct sockaddr *) &global_status->servaddr, sizeof(global_status->servaddr));
 		global_status->seq_num++;
 		fragbool = 1;	
 	}
